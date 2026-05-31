@@ -8,7 +8,7 @@ st.set_page_config(page_title="수혈 가이드라인 챗봇", page_icon="🩸",
 
 # 1. 웹사이트 제목 및 설명 설정
 st.title("🩸 수혈 가이드라인 챗봇")
-st.write("혈액은행_병리맨"
+st.write("혈액은행_병리맨")
 
 # 2. 스트림릿 금고(Secrets)에서 구글 API 키 가져오기
 if "GOOGLE_API_KEY" not in st.secrets:
