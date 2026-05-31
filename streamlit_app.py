@@ -62,7 +62,7 @@ if pdf_text:
         # 2) 제미나이 모델을 사용하여 PDF 기반 답변 생성
         with st.chat_message("assistant"):
             try:
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 
                 # AI에게 가이드라인 문서와 대화 맥락을 함께 전달
                 full_prompt = (
