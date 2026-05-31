@@ -1,56 +1,68 @@
-import streamlit as st
-from openai import OpenAI
+ import streamlit as st
+import google.generativeai as genai
+from pypdf import PdfReader
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# 1. 웹사이트 제목 및 설명 설정
+st.title("🩸 수혈 가이드라인 챗봇")
+st.write("업로드된 '수혈_가이드라인.pdf' 문서 내용을 기반으로 답변합니다.")
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# 2. 스트림릿 금고(Secrets)에서 구글 API 키 가져오기
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.info("오른쪽 아래 'Manage app' -> 'Settings' -> 'Secrets'에 GOOGLE_API_KEY를 입력해 주세요.", icon="🔑")
+    st.stop()
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# 구글 제미나이 설정
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
+# 3. PDF 파일에서 텍스트 추출하는 함수 (속도를 위해 캐싱 처리)
+@st.cache_resource
+def load_pdf(file_path):
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        st.error(f"PDF 파일을 읽는 중 오류가 발생했습니다: {e}")
+        return None
+
+# 저장소에 있는 '수혈_가이드라인.pdf' 읽기
+pdf_text = load_pdf("수혈_가이드라인.pdf")
+
+if pdf_text:
+    # 대화 기록을 저장할 세션 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display the existing chat messages via `st.chat_message`.
+    # 이전 대화 내용 화면에 표시
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
+    # 사용자 질문 입력창
+    if prompt := st.chat_input("수혈 가이드라인에 대해 궁금한 점을 물어보세요!"):
+        # 1) 사용자 메시지 화면에 표시 및 저장
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
+        # 2) 제미나이 모델을 사용하여 PDF 기반 답변 생성
         with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            try:
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                # AI에게 가이드라인 문서와 대화 맥락을 함께 전달
+                full_prompt = (
+                    f"당신은 병원 수혈 지침 전문 챗봇입니다. 아래 제공된 [지침 문서]의 내용을 기반으로만 사용자의 질문에 정확하고 친절하게 답변하세요.\n\n"
+                    f"[지침 문서 내용]\n{pdf_text}\n\n"
+                    f"질문: {prompt}"
+                )
+                
+                response = model.generate_content(full_prompt)
+                st.markdown(response.text)
+                
+                # AI 답변 저장
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"답변을 생성하는 중에 문제가 발생했습니다: {e}")
